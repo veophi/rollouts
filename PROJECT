@@ -15,6 +15,10 @@ resources:
 - api:
     crdVersion: v1
     namespaced: true
+<<<<<<< Updated upstream
+=======
+  controller: true
+>>>>>>> Stashed changes
   domain: kruise.io
   group: rollouts
   kind: BatchRelease

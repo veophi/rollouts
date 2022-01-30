@@ -1,5 +1,9 @@
 /*
+<<<<<<< Updated upstream
 Copyright 2022 Kruise Authors.
+=======
+Copyright 2022 The Kruise Authors.
+>>>>>>> Stashed changes
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -230,14 +234,26 @@ type RolloutPhase string
 const (
 	// RolloutPhaseInitial indicates a rollout is Initial
 	RolloutPhaseInitial RolloutPhase = "Initial"
+	// RolloutPhaseVerify indicates a rollout is verifying
+	RolloutPhaseVerify RolloutPhase = "Verifying"
 	// RolloutPhaseHealthy indicates a rollout is healthy
 	RolloutPhaseHealthy RolloutPhase = "Healthy"
+	// RolloutPhasePreparing indicates a rollout is preparing for next progress.
+	RolloutPhasePreparing RolloutPhase = "Preparing"
 	// RolloutPhaseProgressing indicates a rollout is not yet healthy but still making progress towards a healthy state
 	RolloutPhaseProgressing RolloutPhase = "Progressing"
-	// RolloutPhasePaused indicates a rollout is not yet healthy and will not make progress until paused=false
+	// RolloutPhasePaused indicates a rollout is not yet healthy and will not make progress until unpaused
 	RolloutPhasePaused RolloutPhase = "Paused"
+	// RolloutPhaseFinalizing indicates a rollout is finalizing
+	RolloutPhaseFinalizing RolloutPhase = "Finalizing"
+	// RolloutPhaseRollingBack indicates a rollout is rolling back
+	RolloutPhaseRollingBack RolloutPhase = "RollingBack"
 	// RolloutPhaseTerminating indicates a rollout is terminated
 	RolloutPhaseTerminating RolloutPhase = "Terminating"
+	// RolloutPhaseCompleted indicates a rollout is completed
+	RolloutPhaseCompleted RolloutPhase = "Completed"
+	// RolloutPhaseCancelled indicates a rollout is cancelled
+	RolloutPhaseCancelled RolloutPhase = "Cancelled"
 )
 
 // +genclient
