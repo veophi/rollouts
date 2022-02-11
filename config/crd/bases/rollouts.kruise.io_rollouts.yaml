@@ -36,28 +36,55 @@ spec:
           spec:
             description: RolloutSpec defines the desired state of Rollout
             properties:
+              objectRef:
+                properties:
+                  type:
+                    description: workloadRef, revisionRef default is workloadRef
+                    type: string
+                  workloadRef:
+                    description: WorkloadRef contains enough information to let you
+                      identify a workload for Rollout Batch release of the bypass
+                    properties:
+                      apiVersion:
+                        description: API Version of the referent
+                        type: string
+                      kind:
+                        description: Kind of the referent
+                        type: string
+                      name:
+                        description: Name of the referent
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    - name
+                    type: object
+                required:
+                - type
+                type: object
               strategy:
                 description: The deployment strategy to use to replace existing pods
                   with new ones.
                 properties:
-                  canary:
-                    description: BlueGreen *BlueGreenStrategy `json:"blueGreen,omitempty"
-                      protobuf:"bytes,1,opt,name=blueGreen"`
+                  canaryPlan:
+                    description: CanaryStrategy defines parameters for a Replica Based
+                      Canary
                     properties:
-                      stableService:
-                        description: CanaryService holds the name of a service which
-                          selects pods with canary version and don't select any pods
-                          with stable version. CanaryService string `json:"canaryService,omitempty"`
-                          StableService holds the name of a service which selects
-                          pods with stable version and don't select any pods with
-                          canary version.
-                        type: string
                       steps:
                         description: Steps define the order of phases to execute the
                           canary deployment
                         items:
                           description: CanaryStep defines a step of a canary workload.
                           properties:
+                            canaryReplicas:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: 'Replicas is the number of expected canary
+                                pods in this batch it can be an absolute number (ex:
+                                5) or a percentage of total pods. it is mutually exclusive
+                                with the PodList field'
+                              x-kubernetes-int-or-string: true
                             pause:
                               description: Pause freezes the rollout by setting spec.Paused
                                 to true. A Rollout will resume when spec.Paused is
@@ -69,7 +96,7 @@ spec:
                                   format: int32
                                   type: integer
                               type: object
-                            setWeight:
+                            weight:
                               description: SetWeight sets what percentage of the canary
                                 pods should receive
                               format: int32
@@ -80,29 +107,6 @@ spec:
                         description: TrafficRouting hosts all the supported service
                           meshes supported to enable more fine-grained traffic routing
                         properties:
-                          alb:
-                            description: AlbTrafficRouting configuration for Nginx
-                              ingress controller to control traffic routing
-                            properties:
-                              ingress:
-                                description: Ingress refers to the name of an `Ingress`
-                                  resource in the same namespace as the `Rollout`
-                                type: string
-                              tickets:
-                                description: A/B Testing
-                                properties:
-                                  cookie:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  header:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                type: object
-                            required:
-                            - ingress
-                            type: object
                           nginx:
                             description: Nginx holds Nginx Ingress specific configuration
                               to route traffic
@@ -111,51 +115,41 @@ spec:
                                 description: Ingress refers to the name of an `Ingress`
                                   resource in the same namespace as the `Rollout`
                                 type: string
-                              tickets:
-                                description: A/B Testing
-                                properties:
-                                  cookie:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  header:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                type: object
                             required:
                             - ingress
                             type: object
-                          type:
+                          service:
+                            description: Service holds the name of a service which
+                              selects pods with stable version and don't select any
+                              pods with canary version.
                             type: string
+                          type:
+                            description: Nginx, Alb, Istio etc.
+                            type: string
+                        required:
+                        - type
                         type: object
                     type: object
-                type: object
-              targetRef:
-                description: TargetRef contains enough information to let you identify
-                  a workload for Rollout
-                properties:
-                  apiVersion:
-                    description: API Version of the referent
-                    type: string
-                  kind:
-                    description: Kind of the referent
-                    type: string
-                  name:
-                    description: Name of the referent
+                  paused:
+                    description: Paused indicates that the Rollout is paused. Default
+                      value is false
+                    type: boolean
+                  type:
+                    description: canaryPlan, BlueGreenPlan Default value is canaryPlan
                     type: string
                 required:
-                - apiVersion
-                - kind
-                - name
+                - type
                 type: object
             required:
+            - objectRef
             - strategy
-            - targetRef
             type: object
           status:
             description: RolloutStatus defines the observed state of Rollout
             properties:
+              canaryRevision:
+                description: CanaryRevision the hash of the canary pod template
+                type: string
               canaryStatus:
                 description: Canary describes the state of the canary rollout
                 properties:
@@ -246,9 +240,6 @@ spec:
               stableRevision:
                 description: StableRevision indicates the revision pods that has successfully
                   rolled out
-                type: string
-              updateRevision:
-                description: UpdateRevision the hash of the current pod template
                 type: string
             type: object
         type: object

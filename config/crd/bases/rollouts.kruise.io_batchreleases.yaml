@@ -109,19 +109,29 @@ spec:
                 description: TargetRevisionName contains the name of the componentRevisionName
                   that we need to upgrade to.
                 properties:
-                  apiVersion:
-                    description: API Version of the referent
+                  type:
+                    description: workloadRef, revisionRef default is workloadRef
                     type: string
-                  kind:
-                    description: Kind of the referent
-                    type: string
-                  name:
-                    description: Name of the referent
-                    type: string
+                  workloadRef:
+                    description: WorkloadRef contains enough information to let you
+                      identify a workload for Rollout Batch release of the bypass
+                    properties:
+                      apiVersion:
+                        description: API Version of the referent
+                        type: string
+                      kind:
+                        description: Kind of the referent
+                        type: string
+                      name:
+                        description: Name of the referent
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    - name
+                    type: object
                 required:
-                - apiVersion
-                - kind
-                - name
+                - type
                 type: object
             required:
             - releasePlan
@@ -135,6 +145,8 @@ spec:
                 description: Canary describes the state of the canary rollout
                 properties:
                   batchState:
+                    description: ReleasingBatchState indicates the state of the current
+                      batch.
                     type: string
                   currentBatch:
                     description: The current batch the rollout is working on/blocked,
