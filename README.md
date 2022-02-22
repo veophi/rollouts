@@ -1,4 +1,4 @@
-# Rollouts
+# Kruise-Rollouts
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 ## Introduction
@@ -27,6 +27,18 @@ Kruise Rollouts is a **Bypass** component which provides advanced deployment cap
 
 - **Easy-integration**:
     - Easily integrate with classic or GitOps-style Kubernetes-based PaaS.
+
+## Comparision with Other SOTA Rollout Components
+
+|         | Flagger     | Argo-Rollout     |  Kruise-Rollout|
+| ---------- | :-----------:  | :-----------: |  :-----------: |
+| Multi-Batch Configuration    |✅ | ✅ |  ✅  | 
+| Traffic Routing Control      |✅ | ✅ |  ✅  |
+| Work on Deployment           |✅ |    |  ✅  |
+| Work on CloneSet             |   |    |  ✅  |
+| Plug and Play                |   |    |  ✅  |
+| Work with HPA In Parallel    |   | ✅ |  ✅  |
+| Hight Compatibility with <br> Other Third-Part Operators| | |  ✅   |
 
 ## Documents
 Coming soon ...
