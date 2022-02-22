@@ -36,10 +36,12 @@ Kruise Rollouts is a **Bypass** component which provides advanced deployment cap
 | Traffic Routing Control      |✅ | ✅ |  ✅  |
 | Work on Deployment           |✅ |    |  ✅  |
 | Work on CloneSet             |   |    |  ✅  |
-| Plug and Play                |   |    |  ✅  |
+| Plug and Play                |✅ |    |  ✅  |
+| Plug Out Freely              |   |    |  ✅  |
 | Work with HPA In Parallel    |   | ✅ |  ✅  |
 | Hight Compatibility with <br> Other Third-Part Operators| | |  ✅   |
 
+Plug Out Freely
 ## Documents
 Coming soon ...
 
