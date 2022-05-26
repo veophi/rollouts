@@ -48,7 +48,7 @@ func (r *rolloutContext) runCanary() error {
 	case rolloutv1alpha1.CanaryStepStateUpgrade:
 		klog.Infof("rollout(%s/%s) run canary strategy, and state(%s)", r.rollout.Namespace, r.rollout.Name, rolloutv1alpha1.CanaryStepStateUpgrade)
 		// If the last step is 100%, there is no need to execute the canary process at this time
-		if r.rollout.Spec.Strategy.Canary.Steps[canaryStatus.CurrentStepIndex-1].Weight == 100 {
+		if r.rollout.Spec.Strategy.Canary.Steps[canaryStatus.CurrentStepIndex-1].Weight == 100 && r.workload.Labels[util.RolloutIDLabel] == "" {
 			klog.Infof("rollout(%s/%s) last step is 100%, there is no need to execute the canary process at this time, and set state=%s",
 				r.rollout.Namespace, r.rollout.Name, canaryStatus.CurrentStepIndex-1, canaryStatus.CurrentStepIndex, rolloutv1alpha1.CanaryStepStateCompleted)
 			canaryStatus.LastUpdateTime = &metav1.Time{Time: time.Now()}
@@ -162,7 +162,7 @@ func (r *rolloutContext) doCanaryUpgrade() (bool, error) {
 	cond.Message = fmt.Sprintf("Rollout is in step(%d/%d), and upgrade workload new versions", canaryStatus.CurrentStepIndex, steps)
 	r.newStatus.Message = cond.Message
 	// promote workload next batch release
-	if *batch.Spec.ReleasePlan.BatchPartition+1 < canaryStatus.CurrentStepIndex {
+	if *batch.Spec.ReleasePlan.BatchPartition+1 != canaryStatus.CurrentStepIndex {
 		r.recorder.Eventf(r.rollout, corev1.EventTypeNormal, "Progressing", fmt.Sprintf("start upgrade step(%d) canary pods with new versions", canaryStatus.CurrentStepIndex))
 		klog.Infof("rollout(%s/%s) will promote batch from(%d) -> to(%d)", r.rollout.Namespace, r.rollout.Name, *batch.Spec.ReleasePlan.BatchPartition+1, canaryStatus.CurrentStepIndex)
 		return r.batchControl.Promote(canaryStatus.CurrentStepIndex, false)

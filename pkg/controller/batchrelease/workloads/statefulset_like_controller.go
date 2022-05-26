@@ -212,6 +212,9 @@ func (c *StatefulSetLikeController) ListOwnedPods() ([]*v1.Pod, error) {
 	for i := range podLister.Items {
 		pod := &podLister.Items[i]
 		owner := metav1.GetControllerOf(pod)
+		if !pod.DeletionTimestamp.IsZero() {
+			continue
+		}
 		if owner == nil || owner.UID != set.GetUID() {
 			continue
 		}

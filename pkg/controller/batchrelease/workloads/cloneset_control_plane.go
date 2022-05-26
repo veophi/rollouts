@@ -198,7 +198,7 @@ func (c *CloneSetRolloutController) PatchPodBatchLabel(rolloutID string, current
 		patchedCount++
 	}
 
-	klog.V(3).Infof("BatchRelease(%v) patch %d pods with batchID, goal is %d pods", patchedCount, canaryGoal)
+	klog.V(3).Infof("BatchRelease(%v) patch %d pods with batchID, goal is %d pods", c.releasePlanKey, patchedCount, canaryGoal)
 
 	if patchedCount >= canaryGoal {
 		return true, nil

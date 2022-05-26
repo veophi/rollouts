@@ -55,7 +55,6 @@ const (
 	StashCloneSetPartition        = "batchrelease.rollouts.kruise.io/stash-partition"
 	CanaryDeploymentLabelKey      = "rollouts.kruise.io/canary-deployment"
 	CanaryDeploymentFinalizer     = "finalizer.rollouts.kruise.io/batch-release"
-
 	// We omit vowels from the set of available characters to reduce the chances
 	// of "bad words" being formed.
 	alphanums = "bcdfghjklmnpqrstvwxz2456789"
@@ -173,7 +172,9 @@ func EqualIgnoreHash(template1, template2 *v1.PodTemplateSpec) bool {
 }
 
 func HashReleasePlanBatches(releasePlan *v1alpha1.ReleasePlan) string {
-	by, _ := json.Marshal(releasePlan.Batches)
+	r := releasePlan.DeepCopy()
+	r.Paused = false
+	by, _ := json.Marshal(r)
 	md5Hash := sha256.Sum256(by)
 	return hex.EncodeToString(md5Hash[:])
 }
@@ -298,6 +299,32 @@ func IsRollingUpdateStrategy(object *unstructured.Unstructured) bool {
 	return t == "" || t == string(apps.RollingUpdateStatefulSetStrategyType)
 }
 
+func SetStatefulSetPartition(object *unstructured.Unstructured, partition int32) {
+	o := object.Object
+	spec, ok := o["spec"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	updateStrategy, ok := spec["updateStrategy"].(map[string]interface{})
+	if !ok {
+		spec["updateStrategy"] = map[string]interface{}{
+			"type": apps.RollingUpdateStatefulSetStrategyType,
+			"rollingUpdate": map[string]interface{}{
+				"partition": pointer.Int32(partition),
+			},
+		}
+		return
+	}
+	rollingUpdate, ok := updateStrategy["rollingUpdate"].(map[string]interface{})
+	if !ok {
+		updateStrategy["rollingUpdate"] = map[string]interface{}{
+			"partition": pointer.Int32(partition),
+		}
+	} else {
+		rollingUpdate["partition"] = pointer.Int32(partition)
+	}
+}
+
 func ParseReplicasFrom(object *unstructured.Unstructured) int32 {
 	replicas := int32(1)
 	field, found, err := unstructured.NestedInt64(object.Object, "spec", "replicas")
@@ -305,6 +332,17 @@ func ParseReplicasFrom(object *unstructured.Unstructured) int32 {
 		replicas = int32(field)
 	}
 	return replicas
+}
+
+func ParsePodTemplate(object *unstructured.Unstructured) *v1.PodTemplateSpec {
+	t, found, err := unstructured.NestedFieldNoCopy(object.Object, "spec", "template")
+	if err != nil || !found {
+		return nil
+	}
+	template := &v1.PodTemplateSpec{}
+	templateByte, _ := json.Marshal(t)
+	_ = json.Unmarshal(templateByte, template)
+	return template
 }
 
 func ParseInt32PartitionFrom(object *unstructured.Unstructured) int32 {

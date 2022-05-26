@@ -36,6 +36,7 @@ func (r *Executor) checkHealthBeforeExecution(controller workloads.WorkloadContr
 	var needRetry bool
 	needStopThisRound := false
 	result := reconcile.Result{}
+	oldStatus := r.releaseStatus.DeepCopy()
 
 	// sync the workload info and watch the workload change event
 	workloadEvent, workloadInfo, err := controller.SyncWorkloadInfo()
@@ -140,7 +141,6 @@ func (r *Executor) checkHealthBeforeExecution(controller workloads.WorkloadContr
 	}
 
 	// sync workload info with status
-	oldStatus := r.releaseStatus.DeepCopy()
 	refreshStatus(r.release, r.releaseStatus, workloadInfo)
 
 	// If it needs to retry or status phase or state changed, should
