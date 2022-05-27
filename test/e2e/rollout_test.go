@@ -78,6 +78,7 @@ var _ = SIGDescribe("Rollout", func() {
 	}
 
 	UpdateDeployment := func(object *apps.Deployment) *apps.Deployment {
+		object = object.DeepCopy()
 		var clone *apps.Deployment
 		Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			clone = &apps.Deployment{}
@@ -85,6 +86,7 @@ var _ = SIGDescribe("Rollout", func() {
 			if err != nil {
 				return err
 			}
+			object.Spec.Strategy = clone.Spec.Strategy
 			clone.Spec = *object.Spec.DeepCopy()
 			return k8sClient.Update(context.TODO(), clone)
 		})).NotTo(HaveOccurred())
@@ -93,6 +95,7 @@ var _ = SIGDescribe("Rollout", func() {
 	}
 
 	UpdateCloneSet := func(object *appsv1alpha1.CloneSet) *appsv1alpha1.CloneSet {
+		object = object.DeepCopy()
 		var clone *appsv1alpha1.CloneSet
 		Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			clone = &appsv1alpha1.CloneSet{}
@@ -100,6 +103,7 @@ var _ = SIGDescribe("Rollout", func() {
 			if err != nil {
 				return err
 			}
+			object.Spec.UpdateStrategy = clone.Spec.UpdateStrategy
 			clone.Spec = *object.Spec.DeepCopy()
 			clone.Labels = mergeMap(clone.Labels, object.Labels)
 			clone.Annotations = mergeMap(clone.Annotations, object.Annotations)
@@ -110,6 +114,7 @@ var _ = SIGDescribe("Rollout", func() {
 	}
 
 	UpdateNativeStatefulSet := func(object *apps.StatefulSet) *apps.StatefulSet {
+		object = object.DeepCopy()
 		var clone *apps.StatefulSet
 		Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			clone = &apps.StatefulSet{}
@@ -117,6 +122,7 @@ var _ = SIGDescribe("Rollout", func() {
 			if err != nil {
 				return err
 			}
+			object.Spec.UpdateStrategy = clone.Spec.UpdateStrategy
 			clone.Spec = *object.Spec.DeepCopy()
 			clone.Labels = mergeMap(clone.Labels, object.Labels)
 			clone.Annotations = mergeMap(clone.Annotations, object.Annotations)
@@ -127,6 +133,7 @@ var _ = SIGDescribe("Rollout", func() {
 	}
 
 	UpdateAdvancedStatefulSet := func(object *appsv1beta1.StatefulSet) *appsv1beta1.StatefulSet {
+		object = object.DeepCopy()
 		var clone *appsv1beta1.StatefulSet
 		Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			clone = &appsv1beta1.StatefulSet{}
@@ -134,6 +141,7 @@ var _ = SIGDescribe("Rollout", func() {
 			if err != nil {
 				return err
 			}
+			object.Spec.UpdateStrategy = clone.Spec.UpdateStrategy
 			clone.Spec = *object.Spec.DeepCopy()
 			clone.Labels = mergeMap(clone.Labels, object.Labels)
 			clone.Annotations = mergeMap(clone.Annotations, object.Annotations)
@@ -1622,8 +1630,8 @@ var _ = SIGDescribe("Rollout", func() {
 	})
 
 	KruiseDescribe("CloneSet rollout canary nginx", func() {
-		return
 		It("V1->V2: Percentage, 20%,60% Succeeded", func() {
+			return
 			By("Creating Rollout...")
 			rollout := &rolloutsv1alpha1.Rollout{}
 			Expect(ReadYamlToObject("./test_data/rollout/rollout_canary_base.yaml", rollout)).ToNot(HaveOccurred())
@@ -1812,10 +1820,15 @@ var _ = SIGDescribe("Rollout", func() {
 			newEnvs := mergeEnvVar(workload.Spec.Template.Spec.Containers[0].Env, v1.EnvVar{Name: "NODE_NAME", Value: "version2"})
 			workload.Spec.Template.Spec.Containers[0].Image = "echoserver:failed"
 			workload.Spec.Template.Spec.Containers[0].Env = newEnvs
-			UpdateCloneSet(workload)
+			workload = UpdateCloneSet(workload)
 			By("Update cloneSet env NODE_NAME from(version1) -> to(version2)")
+
 			// wait step 1 complete
-			time.Sleep(time.Second * 20)
+			Eventually(func() bool {
+				clone := &appsv1alpha1.CloneSet{}
+				Expect(GetObject(workload.Name, clone)).NotTo(HaveOccurred())
+				return clone.Status.UpdatedReplicas == 1 && !clone.Spec.UpdateStrategy.Paused
+			}, 5*time.Minute, time.Second).Should(BeTrue())
 
 			// check workload status & paused
 			Expect(GetObject(workload.Name, workload)).NotTo(HaveOccurred())
@@ -2250,7 +2263,6 @@ var _ = SIGDescribe("Rollout", func() {
 	})
 
 	KruiseDescribe("Native StatefulSet rollout canary nginx", func() {
-		return
 		It("V1->V2: Percentage, 20%,60% Succeeded", func() {
 			By("Creating Rollout...")
 			rollout := &rolloutsv1alpha1.Rollout{}
@@ -2750,7 +2762,6 @@ var _ = SIGDescribe("Rollout", func() {
 	})
 
 	KruiseDescribe("Advanced StatefulSet rollout canary nginx", func() {
-		return
 		It("V1->V2: Percentage, 20%,60% Succeeded", func() {
 			By("Creating Rollout...")
 			rollout := &rolloutsv1alpha1.Rollout{}
@@ -3251,7 +3262,6 @@ var _ = SIGDescribe("Rollout", func() {
 
 	KruiseDescribe("Rolout Patch pod batch ID", func() {
 		It("Normal Case", func() {
-			return
 			By("Creating Rollout...")
 			rollout := &rolloutsv1alpha1.Rollout{}
 			Expect(ReadYamlToObject("./test_data/rollout/rollout_canary_base.yaml", rollout)).ToNot(HaveOccurred())
@@ -3315,7 +3325,6 @@ var _ = SIGDescribe("Rollout", func() {
 		})
 
 		It("Scaling Case", func() {
-			return
 			By("Creating Rollout...")
 			rollout := &rolloutsv1alpha1.Rollout{}
 			Expect(ReadYamlToObject("./test_data/rollout/rollout_canary_base.yaml", rollout)).ToNot(HaveOccurred())

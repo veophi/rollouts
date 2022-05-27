@@ -18,7 +18,10 @@ package main
 
 import (
 	"flag"
+	"k8s.io/client-go/rest"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kruisev1aplphal1 "github.com/openkruise/kruise-api/apps/v1alpha1"
 	kruisev1beta1 "github.com/openkruise/kruise-api/apps/v1beta1"
@@ -74,6 +77,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	NewClientWithUnstructuredObject := func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+		c, err := client.New(config, options)
+		if err != nil {
+			return nil, err
+		}
+
+		return client.NewDelegatingClient(client.NewDelegatingClientInput{
+			CacheReader:       cache,
+			Client:            c,
+			UncachedObjects:   uncachedObjects,
+			CacheUnstructured: true,
+		})
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -81,6 +98,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "71ddec2c.kruise.io",
+		NewClient: 				NewClientWithUnstructuredObject,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

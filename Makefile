@@ -83,8 +83,9 @@ deploy: manifests kustomize manifests ## Deploy controller to the K8s cluster sp
 
 deploy-dry-run: manifests kustomize manifests
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default
+	$(KUSTOMIZE) build config/default > rollout_controller_deploy.yaml
 	echo -e "resources:\n- manager.yaml" > config/manager/kustomization.yaml
+
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 

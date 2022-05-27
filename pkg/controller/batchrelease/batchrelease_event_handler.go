@@ -69,7 +69,7 @@ func (p podEventHandler) Delete(evt event.DeleteEvent, q workqueue.RateLimitingI
 func (p podEventHandler) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	oldPod := evt.ObjectOld.(*corev1.Pod)
 	newPod := evt.ObjectNew.(*corev1.Pod)
-	if oldPod.ResourceVersion != newPod.ResourceVersion ||
+	if oldPod.ResourceVersion == newPod.ResourceVersion ||
 		(!IsRolloutIDChanged(oldPod, newPod) && util.IsPodReady(oldPod) == util.IsPodReady(newPod)) {
 		return
 	}
