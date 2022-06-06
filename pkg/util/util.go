@@ -45,8 +45,15 @@ const (
 	KruiseRolloutFinalizer = "rollouts.kruise.io/rollout"
 	// rollout spec hash
 	RolloutHashAnnotation = "rollouts.kruise.io/hash"
-	// RollbackInBatchAnnotation allow use disable quick rollback, and will roll back in batch style.
+	// RollbackInBatchAnnotation allow users disable quick rollback, and will roll back in batch style.
 	RollbackInBatchAnnotation = "rollouts.kruise.io/rollback-in-batch"
+
+	// RolloutIDLabel allow users patch batch id to pods during rollout
+	// RolloutIDLabel should be an uuid that distinguishes each workload release.
+	RolloutIDLabel = "apps.kruise.io/rollout-id"
+	// RolloutBatchIDLabel is the label key of batch id that will be patched to pods during rollout.
+	// Only when RolloutIDLabel is set, RolloutBatchIDLabel will be patched.
+	RolloutBatchIDLabel = "apps.kruise.io/rollout-batch-id"
 )
 
 // RolloutState is annotation[rollouts.kruise.io/in-progressing] value

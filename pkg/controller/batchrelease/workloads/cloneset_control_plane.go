@@ -170,9 +170,35 @@ func (c *CloneSetRolloutController) UpgradeOneBatch() (bool, error) {
 		}
 	}
 
+	patchDone, err := c.PatchPodBatchLabel(canaryGoal)
+	if !patchDone || err != nil {
+		return false, err
+	}
+
 	c.recorder.Eventf(c.parentController, v1.EventTypeNormal, "SetBatchDone",
 		"Finished submitting all upgrade quests for batch %d", c.releaseStatus.CanaryStatus.CurrentBatch)
 	return true, nil
+}
+
+func (c *CloneSetRolloutController) PatchPodBatchLabel(canaryGoal int32) (bool, error) {
+	rolloutID, exist := c.parentController.Labels[util.RolloutIDLabel]
+	if !exist || rolloutID == "" {
+		// if rollout ID is not set in Rollout, check workload
+		rolloutID, exist = c.clone.Labels[util.RolloutIDLabel]
+		if !exist || rolloutID == "" {
+			return true, nil
+		}
+	}
+
+	pods, err := util.ListOwnedPods(c.client, c.clone)
+	if err != nil {
+		klog.Errorf("Failed to list pods for CloneSet %v", c.targetNamespacedName)
+		return false, err
+	}
+
+	batchID := c.parentController.Status.CanaryStatus.CurrentBatch
+	updateRevision := c.parentController.Status.UpdateRevision
+	return util.PatchPodBatchLabel(c.client, pods, rolloutID, batchID, updateRevision, canaryGoal, c.releasePlanKey)
 }
 
 // CheckOneBatchReady checks to see if the pods are all available according to the rollout plan

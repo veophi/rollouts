@@ -317,7 +317,7 @@ func GetStatefulSetMaxUnavailable(object *unstructured.Unstructured) *intstr.Int
 
 func ParseStatefulSetInfo(object *unstructured.Unstructured, namespacedName types.NamespacedName) *WorkloadInfo {
 	workloadGVKWithName := fmt.Sprintf("%v(%v)", object.GroupVersionKind().String(), namespacedName)
-	selector, err := ParseSelectorFrom(object)
+	selector, err := ParseSelector(object)
 	if err != nil {
 		klog.Errorf("Failed to parse selector for workload(%v)", workloadGVKWithName)
 	}
@@ -446,16 +446,26 @@ func parseMetadataFrom(object *unstructured.Unstructured) *metav1.ObjectMeta {
 	return meta
 }
 
-// ParseSelectorFrom can find labelSelector and parse it as selector for unstructured object
-func ParseSelectorFrom(object *unstructured.Unstructured) (labels.Selector, error) {
-	m, found, err := unstructured.NestedFieldNoCopy(object.Object, "spec", "selector")
-	if err != nil || !found {
-		return nil, err
+// ParseSelector can find labelSelector and parse it as selector for unstructured object
+func ParseSelector(object client.Object) (labels.Selector, error) {
+	switch o := object.(type) {
+	case *apps.Deployment:
+		return metav1.LabelSelectorAsSelector(o.Spec.Selector)
+	case *appsv1alpha1.CloneSet:
+		return metav1.LabelSelectorAsSelector(o.Spec.Selector)
+	case *unstructured.Unstructured:
+		m, found, err := unstructured.NestedFieldNoCopy(o.Object, "spec", "selector")
+		if err != nil || !found {
+			return nil, err
+		}
+		byteInfo, _ := json.Marshal(m)
+		labelSelector := &metav1.LabelSelector{}
+		_ = json.Unmarshal(byteInfo, labelSelector)
+		return metav1.LabelSelectorAsSelector(labelSelector)
+	default:
+		panic("unsupported workload type to ParseSelector function")
 	}
-	byteInfo, _ := json.Marshal(m)
-	labelSelector := &metav1.LabelSelector{}
-	_ = json.Unmarshal(byteInfo, labelSelector)
-	return metav1.LabelSelectorAsSelector(labelSelector)
+
 }
 
 func unmarshalIntStr(m interface{}) *intstr.IntOrString {

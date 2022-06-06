@@ -37,8 +37,8 @@ type UnifiedWorkloadController interface {
 	ClaimWorkload() (bool, error)
 	ReleaseWorkload(cleanup bool) (bool, error)
 	UpgradeBatch(canaryReplicasGoal, stableReplicasGoal int32) (bool, error)
-	IsBatchUpgraded(canaryReplicasGoal, stableReplicasGoal int32) (bool, error)
 	IsBatchReady(canaryReplicasGoal, stableReplicasGoal int32) (bool, error)
+	ListOwnedPods() ([]*v1.Pod, error)
 }
 
 // UnifiedWorkloadRolloutControlPlane is responsible for handling rollout StatefulSet type of workloads
@@ -154,18 +154,35 @@ func (c *UnifiedWorkloadRolloutControlPlane) UpgradeOneBatch() (bool, error) {
 		"stable-goal", stableGoal,
 		"canary-replicas", currentCanaryReplicas)
 
-	upgradeDone, err := c.IsBatchUpgraded(canaryGoal, stableGoal)
-	if err != nil {
-		return false, err
-	} else if !upgradeDone {
-		if succeed, err := c.UpgradeBatch(canaryGoal, stableGoal); err != nil || !succeed {
-			return false, nil
-		}
+	isUpgradedDone, err := c.UpgradeBatch(canaryGoal, stableGoal)
+	if err != nil || !isUpgradedDone {
+		return false, nil
 	}
 
 	c.recorder.Eventf(c.planController, v1.EventTypeNormal, "SetBatchDone",
 		"Finished submitting all upgrade quests for batch %d", c.planController.Status.CanaryStatus.CurrentBatch)
 	return true, nil
+}
+
+func (c *UnifiedWorkloadRolloutControlPlane) PatchPodBatchLabel(workloadInfo *util.WorkloadInfo, canaryGoal int32) (bool, error) {
+	rolloutID, exist := c.planController.Labels[util.RolloutIDLabel]
+	if !exist || rolloutID == "" {
+		// if rollout ID is not set in Rollout, check workload
+		rolloutID, exist = workloadInfo.Metadata.Labels[util.RolloutIDLabel]
+		if !exist || rolloutID == "" {
+			return true, nil
+		}
+	}
+
+	pods, err := c.ListOwnedPods()
+	if err != nil {
+		klog.Errorf("Failed to list pods for %v", workloadInfo.GVKWithName)
+		return false, err
+	}
+
+	batchID := c.planController.Status.CanaryStatus.CurrentBatch
+	updateRevision := c.planController.Status.UpdateRevision
+	return util.PatchPodBatchLabel(c.client, pods, rolloutID, batchID, updateRevision, canaryGoal, client.ObjectKeyFromObject(c.planController))
 }
 
 // CheckOneBatchReady checks to see if the pods are all available according to the rollout plan
