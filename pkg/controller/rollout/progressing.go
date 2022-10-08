@@ -40,7 +40,7 @@ var defaultGracePeriodSeconds int32 = 3
 func (r *RolloutReconciler) reconcileRolloutProgressing(rollout *rolloutv1alpha1.Rollout) (*time.Time, error) {
 	cond := util.GetRolloutCondition(rollout.Status, rolloutv1alpha1.RolloutConditionProgressing)
 	klog.Infof("reconcile rollout(%s/%s) progressing action", rollout.Namespace, rollout.Name)
-	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout.Spec.ObjectRef.WorkloadRef)
+	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout)
 	if err != nil {
 		klog.Errorf("rollout(%s/%s) get workload failed: %s", rollout.Namespace, rollout.Name, err.Error())
 		return nil, err
@@ -201,7 +201,7 @@ func (r *RolloutReconciler) doProgressingInitializing(rollout *rolloutv1alpha1.R
 
 func (r *RolloutReconciler) doProgressingInRolling(rollout *rolloutv1alpha1.Rollout, newStatus *rolloutv1alpha1.RolloutStatus) (*time.Time, error) {
 	// fetch target workload
-	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout.Spec.ObjectRef.WorkloadRef)
+	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout)
 	if err != nil {
 		klog.Errorf("rollout(%s/%s) GetWorkloadForRef failed: %s", rollout.Namespace, rollout.Name, err.Error())
 		return nil, err
@@ -298,7 +298,7 @@ func (r *RolloutReconciler) reCalculateCanaryStepIndex(rollout *rolloutv1alpha1.
 	} else if err != nil {
 		return 0, err
 	}
-	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout.Spec.ObjectRef.WorkloadRef)
+	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout)
 	if err != nil {
 		klog.Errorf("rollout(%s/%s) get workload failed: %s", rollout.Namespace, rollout.Name, err.Error())
 		return 0, err

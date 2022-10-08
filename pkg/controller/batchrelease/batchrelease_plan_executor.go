@@ -19,6 +19,7 @@ package batchrelease
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	appsv1alpha1 "github.com/openkruise/kruise-api/apps/v1alpha1"
@@ -206,6 +207,19 @@ func (r *Executor) progressBatches(release *v1alpha1.BatchRelease, newStatus *v1
 		}
 
 	case v1alpha1.ReadyBatchState:
+		// check again to make sure the batch is really ready
+		verified, verifiedErr := workloadController.CheckOneBatchReady()
+		switch {
+		case verifiedErr != nil:
+			err = verifiedErr
+			setCondition(newStatus, "Progressing", v1.ConditionFalse, "VerifyBatchFailed", err.Error())
+			goto RETURN
+		case !verified:
+			result = reconcile.Result{RequeueAfter: DefaultDuration}
+			newStatus.CanaryStatus.CurrentBatchState = v1alpha1.UpgradingBatchState
+			goto RETURN
+		}
+
 		if !IsPartitioned(release) {
 			currentTimestamp := time.Now()
 			currentBatch := release.Spec.ReleasePlan.Batches[release.Status.CanaryStatus.CurrentBatch]
@@ -229,6 +243,8 @@ func (r *Executor) progressBatches(release *v1alpha1.BatchRelease, newStatus *v1
 		klog.V(3).Infof("ReleasePlan(%v) Batch State Machine into %s state", "Unknown")
 		panic(fmt.Sprintf("illegal status %+v", newStatus))
 	}
+
+RETURN:
 
 	return progressDone, result, err
 }
@@ -261,8 +277,13 @@ func (r *Executor) getWorkloadController(release *v1alpha1.BatchRelease, newStat
 
 	case apps.SchemeGroupVersion.String():
 		if targetRef.Kind == reflect.TypeOf(apps.Deployment{}).Name() {
-			klog.InfoS("using deployment batch release controller for this batch release", "workload name", targetKey.Name, "namespace", targetKey.Namespace)
-			return workloads.NewDeploymentRolloutController(r.client, r.recorder, release, newStatus, targetKey), nil
+			if strings.EqualFold(release.Annotations[util.DeploymentRolloutStrategy], "inplace") {
+				klog.InfoS("using inPlace deployment batch release controller for this batch release", "workload name", targetKey.Name, "namespace", targetKey.Namespace)
+				return workloads.NewDeploymentInPlaceController(r.client, r.recorder, release, newStatus, targetKey), nil
+			} else {
+				klog.InfoS("using canary deployment batch release controller for this batch release", "workload name", targetKey.Name, "namespace", targetKey.Namespace)
+				return workloads.NewDeploymentRolloutController(r.client, r.recorder, release, newStatus, targetKey), nil
+			}
 		}
 	}
 

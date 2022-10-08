@@ -50,6 +50,11 @@ import (
 )
 
 const (
+	DeploymentPausedAnnotation   = "rollouts.kruise.io/deployment-paused"
+	DeploymentRevisionAnnotation = "deployment.kubernetes.io/revision"
+	RolloutStableRevisionLabel   = "rollouts.kruise.io/stable-revision"
+	DeploymentRolloutStrategy    = "rollouts.kruise.io/deployment-rollout-strategy"
+	DeploymentStrategy           = "rollouts.kruise.io/deployment-strategy"
 	// BatchReleaseControlAnnotation is controller info about batchRelease when rollout
 	BatchReleaseControlAnnotation = "batchrelease.rollouts.kruise.io/control-info"
 	// CanaryDeploymentLabel is to label canary deployment that is created by batchRelease controller
@@ -511,7 +516,7 @@ func GetOwnerWorkload(r client.Reader, object client.Object) (client.Object, err
 	owner := metav1.GetControllerOf(object)
 	// We just care about the top-level workload that is referred by rollout
 	if owner == nil || len(object.GetAnnotations()[InRolloutProgressingAnnotation]) > 0 {
-		return nil, nil
+		return object, nil
 	}
 
 	ownerGvk := schema.FromAPIVersionAndKind(owner.APIVersion, owner.Kind)
@@ -553,4 +558,13 @@ func IsOwnedBy(r client.Reader, child, parent client.Object) (bool, error) {
 
 func IsWorkloadType(object client.Object, t WorkloadType) bool {
 	return WorkloadType(strings.ToLower(object.GetLabels()[WorkloadTypeLabel])) == t
+}
+
+func BuildDeploymentStrategyAnnotation(deployment *apps.Deployment) string {
+	strategy := &apps.DeploymentStrategy{
+		Type:          apps.RollingUpdateDeploymentStrategyType,
+		RollingUpdate: deployment.Spec.Strategy.RollingUpdate,
+	}
+	strategyAnno, _ := json.Marshal(strategy)
+	return string(strategyAnno)
 }

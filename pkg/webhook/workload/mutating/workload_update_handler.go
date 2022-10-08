@@ -19,7 +19,9 @@ package mutating
 import (
 	"context"
 	"encoding/json"
+	deploymentutil "github.com/openkruise/rollouts/pkg/controller/batchrelease/workloads/deploymentinplacecontroller/util"
 	"net/http"
+	"strings"
 
 	kruiseappsv1alpha1 "github.com/openkruise/kruise-api/apps/v1alpha1"
 	appsv1alpha1 "github.com/openkruise/rollouts/api/v1alpha1"
@@ -209,6 +211,22 @@ func (h *WorkloadHandler) handleDeployment(newObj, oldObj *apps.Deployment) (cha
 			newObj.Spec.Paused = true
 			klog.Warningf("deployment(%s/%s) is in rollout(%s) progressing, and set paused=true", newObj.Namespace, newObj.Name, state.RolloutName)
 		}
+		if strings.EqualFold(newObj.Annotations[util.DeploymentRolloutStrategy], "inplace") {
+			if newObj.Spec.Strategy.Type != apps.RecreateDeploymentStrategyType {
+				changed = true
+				newObj.Spec.Strategy.Type = apps.RecreateDeploymentStrategyType
+			}
+			if newObj.Spec.Strategy.RollingUpdate != nil {
+				changed = true
+				newObj.Annotations[util.DeploymentStrategy] = util.BuildDeploymentStrategyAnnotation(newObj)
+				newObj.Spec.Strategy.RollingUpdate = nil
+			}
+			if !util.EqualIgnoreHash(&oldObj.Spec.Template, &newObj.Spec.Template) &&
+				!strings.EqualFold(newObj.Annotations[util.DeploymentPausedAnnotation], "true") {
+				changed = true
+				newObj.Annotations[util.DeploymentPausedAnnotation] = "true"
+			}
+		}
 		return
 	}
 
@@ -218,8 +236,8 @@ func (h *WorkloadHandler) handleDeployment(newObj, oldObj *apps.Deployment) (cha
 		return
 	}
 	// 2. deployment.spec.strategy.type must be RollingUpdate
-	if newObj.Spec.Strategy.Type == apps.RecreateDeploymentStrategyType {
-		klog.Warningf("deployment(%s/%s) strategy type is 'Recreate', rollout will not work on it", newObj.Namespace, newObj.Name)
+	if !deploymentutil.IsRollingUpdate(newObj) {
+		klog.Warningf("deployment(%s/%s) strategy type is not 'RollingUpdate', rollout will not work on it", newObj.Namespace, newObj.Name)
 		return
 	}
 	// 3. deployment.spec.PodTemplate not change
@@ -227,7 +245,7 @@ func (h *WorkloadHandler) handleDeployment(newObj, oldObj *apps.Deployment) (cha
 		return
 	}
 	// 4. the deployment must be in a stable version (only one version of rs)
-	rss, err := h.Finder.GetReplicaSetsForDeployment(newObj)
+	rss, err := h.Finder.GetActiveReplicaSetsForDeployment(newObj)
 	if err != nil {
 		return
 	} else if len(rss) != 1 {
@@ -242,7 +260,6 @@ func (h *WorkloadHandler) handleDeployment(newObj, oldObj *apps.Deployment) (cha
 		return
 	}
 	klog.Infof("deployment(%s/%s) will be in rollout progressing, and set paused=true", newObj.Namespace, newObj.Name)
-
 	changed = true
 	// need set workload paused = true
 	newObj.Spec.Paused = true
@@ -250,6 +267,9 @@ func (h *WorkloadHandler) handleDeployment(newObj, oldObj *apps.Deployment) (cha
 	by, _ := json.Marshal(state)
 	if newObj.Annotations == nil {
 		newObj.Annotations = map[string]string{}
+	}
+	if strings.EqualFold(rollout.Annotations[util.DeploymentRolloutStrategy], "true") {
+		newObj.Annotations[util.DeploymentPausedAnnotation] = "true"
 	}
 	newObj.Annotations[util.InRolloutProgressingAnnotation] = string(by)
 	return

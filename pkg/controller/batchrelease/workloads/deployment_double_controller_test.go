@@ -85,6 +85,9 @@ var (
 			Namespace:  "application",
 			UID:        types.UID("87076677"),
 			Generation: 2,
+			Annotations: map[string]string{
+				"a": "c",
+			},
 			Labels: map[string]string{
 				"app":                                "busybox",
 				apps.DefaultDeploymentUniqueLabelKey: "update-pod-hash",
@@ -196,6 +199,50 @@ func TestDeploymentController(t *testing.T) {
 			Expect(reflect.DeepEqual(oldObject.Labels, newObject.Labels)).Should(BeTrue())
 			Expect(reflect.DeepEqual(oldObject.Finalizers, newObject.Finalizers)).Should(BeTrue())
 			Expect(reflect.DeepEqual(oldObject.Annotations, newObject.Annotations)).Should(BeTrue())
+		})
+	}
+}
+
+func TestDeploymentInPlaceController(t *testing.T) {
+	RegisterFailHandler(Fail)
+
+	cases := []struct {
+		Name    string
+		Paused  bool
+		Cleanup bool
+	}{
+		{
+			Name:    "paused=true, cleanup=true",
+			Paused:  true,
+			Cleanup: true,
+		},
+		{
+			Name:    "paused=true, cleanup=false",
+			Paused:  true,
+			Cleanup: false,
+		},
+		{
+			Name:    "paused=false cleanup=true",
+			Paused:  false,
+			Cleanup: true,
+		},
+		{
+			Name:    "paused=false , cleanup=false",
+			Paused:  false,
+			Cleanup: false,
+		},
+	}
+
+	for _, cs := range cases {
+		t.Run(cs.Name, func(t *testing.T) {
+			release := releaseDeploy.DeepCopy()
+			deploy := stableDeploy.DeepCopy()
+			cli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(release, deploy).Build()
+			rec := record.NewFakeRecorder(100)
+			c := NewDeploymentInPlaceController(cli, rec, release, release.Status.DeepCopy(), client.ObjectKeyFromObject(deploy))
+			canary, err := c.claimDeployment(deploy)
+			Expect(canary).ShouldNot(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }

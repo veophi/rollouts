@@ -4,7 +4,7 @@
 ### Kruise-Rollout-Controller
 - Rollout Support StatefulSet & Advanced StatefulSet
 - Support patch batch-id label to pods during Rollout
-- Support the Gateway API for the canary release
+- Support the Gateway API for the canary Release
 
 ## v0.1.0
 ### Kruise-Rollout-Controller

@@ -52,7 +52,7 @@ func (r *RolloutReconciler) reconcileRolloutTerminating(rollout *rolloutv1alpha1
 func (r *RolloutReconciler) doFinalising(rollout *rolloutv1alpha1.Rollout, newStatus *rolloutv1alpha1.RolloutStatus, isComplete bool) (bool, *time.Time, error) {
 	klog.Infof("reconcile rollout(%s/%s) doFinalising", rollout.Namespace, rollout.Name)
 	// fetch target workload
-	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout.Spec.ObjectRef.WorkloadRef)
+	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout)
 	if err != nil {
 		klog.Errorf("rollout(%s/%s) GetWorkloadForRef failed: %s", rollout.Namespace, rollout.Name, err.Error())
 		return false, nil, err

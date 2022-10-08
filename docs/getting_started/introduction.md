@@ -3,14 +3,14 @@
 Kruise Rollouts is **a Bypass component which provides advanced deployment capabilities such as canary, traffic routing, and progressive delivery features, for a series of Kubernetes workloads, such as Deployment and CloneSet**.
 
 Kruise Rollout integrates with ingress controllers and service meshes, leveraging their traffic shaping abilities to gradually shift traffic to the new version during an update.
-In addition, the business Pods metrics analysis can be used during rollout to determine whether the release will continue or be suspended.
+In addition, the business Pods metrics analysis can be used during rollout to determine whether the Release will continue or be suspended.
 
 ![arch](../images/rollout-arch.png)
 
 ## Why is Kruise Rollout?
 The native Kubernetes Deployment Object supports the **RollingUpdate** strategy which provides a basic set of safety guarantees(maxUnavailable, maxSurge) during an update. However the rolling update strategy faces many limitations:
-- **The process of batch release cannot be strictly controlled**, e.g. 20%, 40% etc. Although maxUnavailable, maxSurge can control the release rate, it will release the next batch as soon as the previous batch has been released.
-- **Can't precisely control traffic flow during the release**, e.g. 20% traffic flow rate to the new version of Pods.
+- **The process of batch Release cannot be strictly controlled**, e.g. 20%, 40% etc. Although maxUnavailable, maxSurge can control the Release rate, it will Release the next batch as soon as the previous batch has been released.
+- **Can't precisely control traffic flow during the Release**, e.g. 20% traffic flow rate to the new version of Pods.
 - **No ability to query external metrics to verify whether the business indicators during the upgrade process are normal**.
 
 ## Features

@@ -29,7 +29,7 @@ To uninstall kruise rollout if it is installed with helm charts:
 
 ```bash
 $ helm uninstall kruise-rollout
-release "kruise-rollout" uninstalled
+Release "kruise-rollout" uninstalled
 ```
 
 ## What's Next

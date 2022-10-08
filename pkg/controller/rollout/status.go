@@ -58,7 +58,7 @@ func (r *RolloutReconciler) updateRolloutStatus(rollout *rolloutv1alpha1.Rollout
 		newStatus.Phase = rolloutv1alpha1.RolloutPhaseInitial
 	}
 	// get ref workload
-	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout.Spec.ObjectRef.WorkloadRef)
+	workload, err := r.Finder.GetWorkloadForRef(rollout.Namespace, rollout)
 	if err != nil {
 		klog.Errorf("rollout(%s/%s) get workload failed: %s", rollout.Namespace, rollout.Name, err.Error())
 		return

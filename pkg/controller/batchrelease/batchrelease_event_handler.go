@@ -123,6 +123,8 @@ func (w workloadEventHandler) Create(evt event.CreateEvent, q workqueue.RateLimi
 func (w workloadEventHandler) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	var gvk schema.GroupVersionKind
 	switch evt.ObjectNew.(type) {
+	case *appsv1.ReplicaSet:
+		gvk = util.ControllerKindDep
 	case *appsv1.Deployment:
 		gvk = util.ControllerKindDep
 	case *kruiseappsv1alpha1.CloneSet:
@@ -143,7 +145,11 @@ func (w workloadEventHandler) Update(evt event.UpdateEvent, q workqueue.RateLimi
 	newStatus := util.ParseWorkloadStatus(newObject)
 	if oldObject.GetGeneration() != newObject.GetGeneration() || !reflect.DeepEqual(oldStatus, newStatus) {
 		workloadNamespacedName := client.ObjectKeyFromObject(newObject)
-		controllerInfo := newObject.GetAnnotations()[util.BatchReleaseControlAnnotation]
+		topWorkload, err := util.GetOwnerWorkload(w.Reader, newObject)
+		if err != nil || topWorkload == nil {
+			return
+		}
+		controllerInfo := topWorkload.GetAnnotations()[util.BatchReleaseControlAnnotation]
 		brNsn, err := getBatchRelease(w.Reader, workloadNamespacedName, gvk, controllerInfo)
 		if err != nil {
 			klog.Errorf("unable to get BatchRelease related with %s (%s/%s), error: %v",

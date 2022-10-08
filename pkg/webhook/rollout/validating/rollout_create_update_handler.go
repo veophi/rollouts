@@ -99,6 +99,9 @@ func (h *RolloutCreateUpdateHandler) validateRolloutUpdate(oldObj, newObj *appsv
 		if !reflect.DeepEqual(oldObj.Spec.Strategy.Canary.TrafficRoutings, newObj.Spec.Strategy.Canary.TrafficRoutings) {
 			return field.ErrorList{field.Forbidden(field.NewPath("Spec.Strategy.Canary.TrafficRoutings"), "Rollout 'Strategy.Canary.TrafficRoutings' field is immutable")}
 		}
+		if oldObj.Annotations[util.DeploymentRolloutStrategy] != newObj.Annotations[util.DeploymentRolloutStrategy] {
+			return field.ErrorList{field.Forbidden(field.NewPath("Annotations"), "Rollout 'rollouts.kruise.io/deployment-rollout-strategy' annotation is immutable")}
+		}
 	}
 
 	/*if newObj.Status.CanaryStatus != nil && newObj.Status.CanaryStatus.CurrentStepState == appsv1alpha1.CanaryStepStateReady {

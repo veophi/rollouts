@@ -19,11 +19,9 @@ package batchrelease
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"strconv"
-
 	appsv1alpha1 "github.com/openkruise/kruise-api/apps/v1alpha1"
 	rolloutv1alpha1 "github.com/openkruise/rollouts/api/v1alpha1"
+	deploymentutil "github.com/openkruise/rollouts/pkg/controller/batchrelease/workloads/deploymentinplacecontroller/util"
 	"github.com/openkruise/rollouts/pkg/util"
 	apps "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -35,7 +33,10 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	utilpointer "k8s.io/utils/pointer"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -185,6 +186,7 @@ func (r *innerBatchRelease) resumeStableWorkload(checkReady bool) (bool, error) 
 
 	case util.ControllerKindDep.Kind:
 		// deployment
+
 		dName := r.rollout.Spec.ObjectRef.WorkloadRef.Name
 		obj := &apps.Deployment{}
 		err := r.Get(context.TODO(), types.NamespacedName{Namespace: r.rollout.Namespace, Name: dName}, obj)
@@ -196,7 +198,7 @@ func (r *innerBatchRelease) resumeStableWorkload(checkReady bool) (bool, error) 
 			return false, err
 		}
 		// set deployment paused=false
-		if obj.Spec.Paused {
+		if obj.Spec.Paused && !strings.EqualFold(r.rollout.Annotations[util.DeploymentRolloutStrategy], "inplace") {
 			err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 				if err = r.Get(context.TODO(), types.NamespacedName{Namespace: r.rollout.Namespace, Name: dName}, obj); err != nil {
 					return err
@@ -217,9 +219,9 @@ func (r *innerBatchRelease) resumeStableWorkload(checkReady bool) (bool, error) 
 		}
 		data := util.DumpJSON(obj.Status)
 		// wait for all pods are ready
-		maxUnavailable, _ := intstr.GetScaledValueFromIntOrPercent(obj.Spec.Strategy.RollingUpdate.MaxUnavailable, int(*obj.Spec.Replicas), true)
+		maxUnavailable := deploymentutil.MaxUnavailable(*obj)
 		if obj.Status.ObservedGeneration != obj.Generation || obj.Status.UpdatedReplicas != *obj.Spec.Replicas ||
-			obj.Status.Replicas != *obj.Spec.Replicas || *obj.Spec.Replicas-obj.Status.AvailableReplicas > int32(maxUnavailable) {
+			obj.Status.Replicas != *obj.Spec.Replicas || *obj.Spec.Replicas-obj.Status.AvailableReplicas > maxUnavailable {
 			klog.Infof("rollout(%s/%s) stable deployment status(%s), and wait a moment", r.rollout.Namespace, r.rollout.Name, data)
 			return false, nil
 		}
@@ -305,8 +307,10 @@ func createBatchRelease(rollout *rolloutv1alpha1.Rollout, batchName string) *rol
 				}),
 			},
 			Labels: map[string]string{
-				BatchReleaseOwnerRefLabel: rollout.Name,
+				BatchReleaseOwnerRefLabel:       rollout.Name,
+				util.RolloutStableRevisionLabel: rollout.Status.StableRevision,
 			},
+			Annotations: map[string]string{},
 		},
 		Spec: rolloutv1alpha1.BatchReleaseSpec{
 			TargetRef: rolloutv1alpha1.ObjectRef{
@@ -325,6 +329,9 @@ func createBatchRelease(rollout *rolloutv1alpha1.Rollout, batchName string) *rol
 
 	if rollout.Spec.RolloutID != "" {
 		br.Labels[util.RolloutIDLabel] = rollout.Spec.RolloutID
+	}
+	if strategy, ok := rollout.Annotations[util.DeploymentRolloutStrategy]; ok {
+		br.Annotations[util.DeploymentRolloutStrategy] = strategy
 	}
 	return br
 }

@@ -78,7 +78,7 @@ After deployed in k8s cluster, it can be accessed via nginx ingress, as follows:
 ![echoserver](../images/echoserver_application.png)
 
 ## 2. Deploy Kruise Rollout CRD
-**Kruise Rollout CRD defines the deployment rollout release process, as follows is an example of canary release,
+**Kruise Rollout CRD defines the deployment rollout Release process, as follows is an example of canary Release,
 the first step is 20% pods, as well as routing 5% traffics to the new version.**
 ```yaml
 apiVersion: rollouts.kruise.io/v1alpha1
@@ -100,7 +100,7 @@ spec:
       steps:
       # routing 5% traffics to the new version
       - weight: 5
-      # Manual confirmation of the release of the remaining pods
+      # Manual confirmation of the Release of the remaining pods
         pause: {}
       # optional, The first step of released replicas. If not set, the default is to use 'weight', as shown above is 5%.
         replicas: 20%
@@ -142,7 +142,7 @@ As shown in the figure below, replicas(5)*replicas(20%)=1 new versions of Pods a
 **The Rollout status shows that the current rollout status is *StepPaused*, which means that the first 20% of Pods are released success and 5% of traffic is routed to the new version.**
 
 After that, developers can use some other methods, such as prometheus metrics business metrics,
-to determine that the release meets expectations and then continue the subsequent releases via **[kubectl-kruise](https://github.com/openkruise/kruise-tools) rollout approve rollout/rollouts-demo -n default** and wait deployment release is complete, as follows:
+to determine that the Release meets expectations and then continue the subsequent releases via **[kubectl-kruise](https://github.com/openkruise/kruise-tools) rollout approve rollout/rollouts-demo -n default** and wait deployment Release is complete, as follows:
 
 ![approve](../images/approve_rollout.png)
 
@@ -188,7 +188,7 @@ spec:
 ![rollback echoserver](../images/rollback_echoserver.png)
 
 ### b. Continuous Release V3 Version
-For some scenarios where you can't rollback, you can continuously release the v3 version. as follows, **change the deployment image address to 1.10.3 and then kubectl apply -f to the k8s cluster**.
+For some scenarios where you can't rollback, you can continuously Release the v3 version. as follows, **change the deployment image address to 1.10.3 and then kubectl apply -f to the k8s cluster**.
 Once the publishing is complete, just perform the **Approve Rollout** step.
 ```yaml
 apiVersion: apps/v1
@@ -204,7 +204,7 @@ spec:
     image: cilium/echoserver:1.10.3
     imagePullPolicy: IfNotPresent
 ```
-![continuous release](../images/continuous_release.png)
+![continuous Release](../images/continuous_release.png)
 
 
 

@@ -19,6 +19,7 @@ package util
 import (
 	"context"
 	"sort"
+	"strconv"
 	"strings"
 
 	appsv1alpha1 "github.com/openkruise/kruise-api/apps/v1alpha1"
@@ -69,7 +70,7 @@ type Workload struct {
 
 // ControllerFinderFunc is a function type that maps a pod to a list of
 // controllers and their scale.
-type ControllerFinderFunc func(namespace string, ref *rolloutv1alpha1.WorkloadRef) (*Workload, error)
+type ControllerFinderFunc func(namespace string, rollout *rolloutv1alpha1.Rollout) (*Workload, error)
 
 type ControllerFinder struct {
 	client.Client
@@ -88,9 +89,9 @@ func NewControllerFinder(c client.Client) *ControllerFinder {
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=replicasets/status,verbs=get;update;patch
 
-func (r *ControllerFinder) GetWorkloadForRef(namespace string, ref *rolloutv1alpha1.WorkloadRef) (*Workload, error) {
+func (r *ControllerFinder) GetWorkloadForRef(namespace string, rollout *rolloutv1alpha1.Rollout) (*Workload, error) {
 	for _, finder := range r.finders() {
-		scale, err := finder(namespace, ref)
+		scale, err := finder(namespace, rollout)
 		if scale != nil || err != nil {
 			return scale, err
 		}
@@ -112,7 +113,8 @@ var (
 )
 
 // getKruiseCloneSet returns the kruise cloneSet referenced by the provided controllerRef.
-func (r *ControllerFinder) getKruiseCloneSet(namespace string, ref *rolloutv1alpha1.WorkloadRef) (*Workload, error) {
+func (r *ControllerFinder) getKruiseCloneSet(namespace string, rollout *rolloutv1alpha1.Rollout) (*Workload, error) {
+	ref := rollout.Spec.ObjectRef.WorkloadRef
 	// This error is irreversible, so there is no need to return error
 	ok, _ := verifyGroupKind(ref, ControllerKruiseKindCS.Kind, []string{ControllerKruiseKindCS.Group})
 	if !ok {
@@ -161,7 +163,8 @@ func (r *ControllerFinder) getKruiseCloneSet(namespace string, ref *rolloutv1alp
 }
 
 // getDeployment returns the k8s native deployment referenced by the provided controllerRef.
-func (r *ControllerFinder) getDeployment(namespace string, ref *rolloutv1alpha1.WorkloadRef) (*Workload, error) {
+func (r *ControllerFinder) getDeployment(namespace string, rollout *rolloutv1alpha1.Rollout) (*Workload, error) {
+	ref := rollout.Spec.ObjectRef.WorkloadRef
 	// This error is irreversible, so there is no need to return error
 	ok, _ := verifyGroupKind(ref, ControllerKindDep.Kind, []string{ControllerKindDep.Group})
 	if !ok {
@@ -180,16 +183,20 @@ func (r *ControllerFinder) getDeployment(namespace string, ref *rolloutv1alpha1.
 		return &Workload{IsStatusConsistent: false}, nil
 	}
 	// stable replicaSet
-	stableRs, err := r.getDeploymentStableRs(stable)
-	if err != nil || stableRs == nil {
+	stableRs, err := r.GetDeploymentStableRs(stable)
+	if err != nil {
 		return &Workload{IsStatusConsistent: false}, err
+	}
+	var stableRevision string
+	if stableRs != nil {
+		stableRevision = stableRs.Labels[apps.DefaultDeploymentUniqueLabelKey]
 	}
 
 	workload := &Workload{
 		ObjectMeta:         stable.ObjectMeta,
 		Replicas:           *stable.Spec.Replicas,
 		IsStatusConsistent: true,
-		StableRevision:     stableRs.Labels[apps.DefaultDeploymentUniqueLabelKey],
+		StableRevision:     stableRevision,
 		CanaryRevision:     ComputeHash(&stable.Spec.Template, nil),
 		RevisionLabelKey:   apps.DefaultDeploymentUniqueLabelKey,
 	}
@@ -197,33 +204,55 @@ func (r *ControllerFinder) getDeployment(namespace string, ref *rolloutv1alpha1.
 	if _, ok = workload.Annotations[InRolloutProgressingAnnotation]; !ok {
 		return workload, nil
 	}
-
 	// in rollout progressing
 	workload.InRolloutProgressing = true
-	// workload is continuous release, indicates rollback(v1 -> v2 -> v1)
-	// delete auto-generated labels
-	delete(stableRs.Spec.Template.Labels, apps.DefaultDeploymentUniqueLabelKey)
-	if EqualIgnoreHash(&stableRs.Spec.Template, &stable.Spec.Template) {
-		workload.IsInRollback = true
-		return workload, nil
+
+	inPlaceRollout := false
+	if s, ok := rollout.Annotations[DeploymentRolloutStrategy]; ok && strings.EqualFold(s, "inplace") {
+		inPlaceRollout = true
 	}
 
-	// canary deployment
-	canary, err := r.getLatestCanaryDeployment(stable)
-	if err != nil || canary == nil {
+	switch {
+	case inPlaceRollout:
+		canaryRs, err := r.GetDeploymentCanaryRs(stable)
+		if err != nil || canaryRs == nil {
+			return workload, err
+		}
+		canaryRSRevision := canaryRs.Labels[apps.DefaultDeploymentUniqueLabelKey]
+		if canaryRSRevision == rollout.Status.StableRevision &&
+			rollout.Status.Phase == rolloutv1alpha1.RolloutPhaseProgressing {
+			workload.IsInRollback = true
+			workload.StableRevision = canaryRSRevision
+		}
+		workload.PodTemplateHash = canaryRs.Labels[apps.DefaultDeploymentUniqueLabelKey]
+		return workload, err
+
+	default:
+		// workload is continuous release, indicates rollback(v1 -> v2 -> v1)
+		// delete auto-generated labels
+		if EqualIgnoreHash(&stableRs.Spec.Template, &stable.Spec.Template) {
+			workload.IsInRollback = true
+			return workload, nil
+		}
+
+		// canary deployment
+		canary, err := r.getLatestCanaryDeployment(stable)
+		if err != nil || canary == nil {
+			return workload, err
+		}
+		workload.CanaryReplicas = canary.Status.Replicas
+		workload.CanaryReadyReplicas = canary.Status.ReadyReplicas
+		canaryRs, err := r.GetDeploymentCanaryRs(canary)
+		if err != nil || canaryRs == nil {
+			return workload, err
+		}
+		workload.PodTemplateHash = canaryRs.Labels[apps.DefaultDeploymentUniqueLabelKey]
 		return workload, err
 	}
-	workload.CanaryReplicas = canary.Status.Replicas
-	workload.CanaryReadyReplicas = canary.Status.ReadyReplicas
-	canaryRs, err := r.getDeploymentStableRs(canary)
-	if err != nil || canaryRs == nil {
-		return workload, err
-	}
-	workload.PodTemplateHash = canaryRs.Labels[apps.DefaultDeploymentUniqueLabelKey]
-	return workload, err
 }
 
-func (r *ControllerFinder) getStatefulSetLikeWorkload(namespace string, ref *rolloutv1alpha1.WorkloadRef) (*Workload, error) {
+func (r *ControllerFinder) getStatefulSetLikeWorkload(namespace string, rollout *rolloutv1alpha1.Rollout) (*Workload, error) {
+	ref := rollout.Spec.ObjectRef.WorkloadRef
 	if ref == nil {
 		return nil, nil
 	}
@@ -313,7 +342,7 @@ func (r *ControllerFinder) GetReplicaSetsForDeployment(obj *apps.Deployment) ([]
 	rss := make([]apps.ReplicaSet, 0)
 	for i := range rsList.Items {
 		rs := rsList.Items[i]
-		if !rs.DeletionTimestamp.IsZero() || (rs.Spec.Replicas != nil && *rs.Spec.Replicas == 0) {
+		if !rs.DeletionTimestamp.IsZero() {
 			continue
 		}
 		if ref := metav1.GetControllerOf(&rs); ref != nil {
@@ -325,8 +354,22 @@ func (r *ControllerFinder) GetReplicaSetsForDeployment(obj *apps.Deployment) ([]
 	return rss, nil
 }
 
-func (r *ControllerFinder) getDeploymentStableRs(obj *apps.Deployment) (*apps.ReplicaSet, error) {
+func (r *ControllerFinder) GetActiveReplicaSetsForDeployment(obj *apps.Deployment) ([]*apps.ReplicaSet, error) {
 	rss, err := r.GetReplicaSetsForDeployment(obj)
+	if err != nil {
+		return nil, err
+	}
+	var activeRss []*apps.ReplicaSet
+	for i := range rss {
+		if rss[i].Spec.Replicas == nil || *rss[i].Spec.Replicas > 0 {
+			activeRss = append(activeRss, &rss[i])
+		}
+	}
+	return activeRss, nil
+}
+
+func (r *ControllerFinder) GetDeploymentStableRs(obj *apps.Deployment) (*apps.ReplicaSet, error) {
+	rss, err := r.GetActiveReplicaSetsForDeployment(obj)
 	if err != nil {
 		return nil, err
 	}
@@ -335,9 +378,36 @@ func (r *ControllerFinder) getDeploymentStableRs(obj *apps.Deployment) (*apps.Re
 	}
 	// get oldest rs
 	sort.Slice(rss, func(i, j int) bool {
-		return rss[i].CreationTimestamp.Before(&rss[j].CreationTimestamp)
+		revisionI, _ := strconv.Atoi(rss[i].Annotations[DeploymentRevisionAnnotation])
+		revisionJ, _ := strconv.Atoi(rss[j].Annotations[DeploymentRevisionAnnotation])
+		return revisionI < revisionJ
 	})
-	return &rss[0], nil
+
+	var stableRs *apps.ReplicaSet
+	for _, rs := range rss {
+		if !EqualIgnoreHash(&rs.Spec.Template, &obj.Spec.Template) {
+			stableRs = rs.DeepCopy()
+			break
+		}
+	}
+	return stableRs, nil
+}
+
+func (r *ControllerFinder) GetDeploymentCanaryRs(obj *apps.Deployment) (*apps.ReplicaSet, error) {
+	rss, err := r.GetReplicaSetsForDeployment(obj)
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) == 0 {
+		return nil, nil
+	}
+
+	for _, rs := range rss {
+		if EqualIgnoreHash(&rs.Spec.Template, &obj.Spec.Template) {
+			return rs.DeepCopy(), nil
+		}
+	}
+	return nil, nil
 }
 
 func verifyGroupKind(ref *rolloutv1alpha1.WorkloadRef, expectedKind string, expectedGroups []string) (bool, error) {
