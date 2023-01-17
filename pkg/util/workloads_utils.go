@@ -19,14 +19,18 @@ package util
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"hash"
 	"hash/fnv"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 	appsv1alpha1 "github.com/openkruise/kruise-api/apps/v1alpha1"
 	appsv1beta1 "github.com/openkruise/kruise-api/apps/v1beta1"
+	"github.com/openkruise/rollouts/api/v1alpha1"
 	"github.com/openkruise/rollouts/pkg/feature"
 	apps "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -371,4 +375,80 @@ func GetEmptyObjectWithKey(object client.Object) client.Object {
 	empty.SetName(object.GetName())
 	empty.SetNamespace(object.GetNamespace())
 	return empty
+}
+
+// MarshalledDeploymentStrategy return a annotation value for rollouts.kruise.io/deployment-strategy
+func MarshalledDeploymentStrategy(style v1alpha1.RollingStyleType, rollingUpdate *apps.RollingUpdateDeployment, partition intstr.IntOrString, paused bool) string {
+	strategyStr, _ := json.Marshal(&v1alpha1.DeploymentStrategy{
+		Paused:        paused,
+		Partition:     partition,
+		RollingStyle:  style,
+		RollingUpdate: rollingUpdate,
+	})
+	return string(strategyStr)
+}
+
+// UnmarshalledDeploymentStrategy decode the strategy object for advanced deployment
+// from the annotation rollouts.kruise.io/deployment-strategy
+func UnmarshalledDeploymentStrategy(deployment *apps.Deployment) v1alpha1.DeploymentStrategy {
+	strategy := v1alpha1.DeploymentStrategy{}
+	if deployment == nil {
+		return strategy
+	}
+	strategyStr := deployment.Annotations[v1alpha1.DeploymentStrategyAnnotation]
+	if strategyStr == "" {
+		return strategy
+	}
+	_ = json.Unmarshal([]byte(strategyStr), &strategy)
+	return strategy
+}
+
+// MarshalledDeploymentExtraStatus return a annotation value for rollouts.kruise.io/deployment-extra-status
+func MarshalledDeploymentExtraStatus(updatedReady, expectedUpdated int32) string {
+	strategyStr, _ := json.Marshal(&v1alpha1.DeploymentExtraStatus{
+		UpdatedReadyReplicas:    updatedReady,
+		ExpectedUpdatedReplicas: expectedUpdated,
+	})
+	return string(strategyStr)
+}
+
+// UnmarshalledDeploymentExtraStatus decode the extra-status object for advanced deployment
+// from the annotation rollouts.kruise.io/deployment-extra-status
+func UnmarshalledDeploymentExtraStatus(deployment *apps.Deployment) v1alpha1.DeploymentExtraStatus {
+	extraStatus := v1alpha1.DeploymentExtraStatus{}
+	if deployment == nil {
+		return extraStatus
+	}
+	extraStatusStr := deployment.Annotations[v1alpha1.DeploymentExtraStatusAnnotation]
+	if extraStatusStr == "" {
+		return extraStatus
+	}
+	_ = json.Unmarshal([]byte(extraStatusStr), &extraStatus)
+	return extraStatus
+}
+
+// FindCanaryAndStableReplicaSet find the canary and stable replicaset for the deployment
+// - canary replicaset: the template equals to deployment's;
+// - stable replicaset: an active replicaset(replicas>0) with the smallest revision.
+func FindCanaryAndStableReplicaSet(rss []*apps.ReplicaSet, d *apps.Deployment) (*apps.ReplicaSet, *apps.ReplicaSet) {
+	// sort replicas set by revision ordinals
+	sort.Slice(rss, func(i, j int) bool {
+		revision1, err1 := strconv.Atoi(rss[i].Annotations[DeploymentRevisionAnnotation])
+		revision2, err2 := strconv.Atoi(rss[j].Annotations[DeploymentRevisionAnnotation])
+		if err1 != nil || err2 != nil || revision1 == revision2 {
+			return rss[i].CreationTimestamp.Before(&rss[j].CreationTimestamp)
+		}
+		return revision1 < revision2
+	})
+
+	var newRS *apps.ReplicaSet
+	var oldRS *apps.ReplicaSet
+	for _, rs := range rss {
+		if EqualIgnoreHash(&rs.Spec.Template, &d.Spec.Template) {
+			newRS = rs
+		} else if oldRS == nil && *rs.Spec.Replicas > 0 {
+			oldRS = rs
+		}
+	}
+	return newRS, oldRS
 }

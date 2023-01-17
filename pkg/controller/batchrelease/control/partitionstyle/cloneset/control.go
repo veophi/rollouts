@@ -136,7 +136,7 @@ func (rc *realController) Finalize(release *v1alpha1.BatchRelease) error {
 	if err := rc.client.Patch(context.TODO(), clone, client.RawPatch(types.MergePatchType, []byte(body))); err != nil {
 		return err
 	}
-	klog.Infof("Successfully finalize StatefulSet %v", klog.KObj(rc.object))
+	klog.Infof("Successfully finalize CloneSet %v", klog.KObj(rc.object))
 	return nil
 }
 

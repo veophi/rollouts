@@ -130,7 +130,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	if err = c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForOwner{
-		IsController: true, OwnerType: &appsv1.ReplicaSet{}}, predicate.Funcs{}); err != nil {
+		IsController: true, OwnerType: &appsv1.Deployment{}}, predicate.Funcs{}); err != nil {
 		return err
 	}
 
@@ -187,13 +187,15 @@ func (r *ReconcileDeployment) Reconcile(_ context.Context, request reconcile.Req
 	if err != nil {
 		errList = append(errList, field.InternalError(field.NewPath("patchExtraStatus"), err))
 	}
+	if len(errList) > 0 {
+		return ctrl.Result{}, errList.ToAggregate()
+	}
 	err = deploymentutil.DeploymentRolloutSatisfied(deployment, dc.strategy.Partition)
 	if err != nil {
 		klog.V(3).Infof("Deployment %v is still rolling: %v", klog.KObj(deployment), err)
-		return reconcile.Result{RequeueAfter: DefaultRetryDuration}, errList.ToAggregate()
+		return reconcile.Result{RequeueAfter: DefaultRetryDuration}, nil
 	}
-
-	return ctrl.Result{}, errList.ToAggregate()
+	return reconcile.Result{}, nil
 }
 
 type controllerFactory DeploymentController
